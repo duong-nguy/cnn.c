@@ -1,3 +1,7 @@
 # cnn.c 
-I don't know anything about C-lang. I will learn about C and Neural Network as I continue to work on this. This respo is inspired by Andrej Karpathy [llm.c](https://github.com/karpathy/llm.c/blob/master/README.md).
+I will implement LeNet here.
+# why?
+This is a good way to learn Linear Algebra, C and revise some basic DeepLearning knowledge.  
+# cite 
+Inspired by Andrej Karpathy [llm.c](https://github.com/karpathy/llm.c/blob/master/README.md).
 
