@@ -23,6 +23,7 @@ void matmul_forward_andrej(float* out,
     }
 }
 
+
 typedef struct {
   int rows;
   int cols;
