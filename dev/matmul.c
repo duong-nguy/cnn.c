@@ -3,110 +3,197 @@
 #include <stdbool.h>
 #include <math.h>
 
-typedef struct {
-  int rows;
-  int cols;
-  float** values;
-} Matrix;
 
-void matmul_forward(Matrix* m1, Matrix* m2, Matrix* out){
-  for (int i = 0; i < out->rows; i++){
-    for (int j = 0; j < out->cols; j++){
-      for (int k = 0; k < m1->cols; k++){
-        //*(*(out->values + i) + j) +=  (*(*(m1->values + i) + k)) * (*(*(m2->values + k) + j));
-        out->values[i][j] += m1->values[i][k] * m2->values[k][j];
+float* make_random_float(size_t N, bool init){
+  float* arr = (float*) malloc(sizeof(float) * N);
+	if (!init){
+		return arr;
+	}
+  for (int i = 0; i < N; i++){
+		arr[i] = (((float)rand() / RAND_MAX) * 2 -1);
+  }
+  return arr;
+}
+
+
+void matmul_forward(float* inp, float* out, float* weight, float* bias, size_t B, size_t C, size_t OC ){
+  for (int b = 0; b < B; b++){
+    float* b_inp = inp + b*C; 
+    for (int oc = 0; oc < OC; oc++){
+      float* oc_w = weight + oc*C;
+      float* b_oc_out = out + (b*OC +oc);
+      *b_oc_out = (bias == NULL) ? 0.0 : bias[oc];
+      for (int c = 0; c < C; c++){
+        *b_oc_out += b_inp[c] * oc_w[c];
       }
     }
   }
 }
-void sigmoid(Matrix* m, Matrix* out){
-  for (int i = 0; i < out->rows; i++){
-    for (int j = 0; j < out->cols; j++){
-      out->values[i][j] = 1 /(1 + exp(m->values[i][j]));
-    }
-  }
+void matmul_backward(float* inp, float* dinp, float* dout, float* weight, 
+		float* dweight, float* dbias, size_t B, size_t C, size_t OC){
+
+/*
+ w = [w1, w2]
+ x = [x1, x2]
+ b
+
+	w1*x1_1 + w2*x2_1 + b = y_1 \
+															 \
+																-=> l = 1/2 * ((y_1 - t_1)**2 + (y_1 - t_1)**2)
+															 /
+	w1*x1_1 + w2*x2_1 + b = y_2 /
+
+
+	dw1 = x1*dy
+	dw2 = x2*dy
+	db  = dy
+	dx1 = w1*dy
+	dx2 = w2*dy
+
+
+	x.shape  = B*C
+	w.shape  = C*OC
+	dy.shape = dout.shape = B*OC 
+	dbias.shap = OC
+  */
+	for (int b = 0; b < B; b++){
+		float* dinp_row = dinp + b * C;
+		for (int c = 0; c < C; c++){
+			float* weight_row = weight + c * OC;
+			for (int oc = 0; oc < OC; oc++){
+				dinp_row[c]	+= weight_row[oc] * dout[oc];
+			}
+		}
+	}
+
+	for (int oc = 0; oc < OC; oc++){
+		float* dout_col = dout + oc*B;
+		float* dweight_row = dweight + oc * C;
+		for (int b = 0; b < B; b++){
+			float* inp_row = inp + b*C;
+			dbias[oc] += dout_col[b];
+			for (int c = 0; c < C; c++){
+				dweight_row[c] += inp_row[c] * dout_col[b];
+			}
+		}
+	}
 }
 
-void malloc_and_init_matrix(Matrix* m, bool random_init){
-  m->values = (float**)malloc(m->rows * sizeof(float*));
-  for (int i = 0; i < m->rows; i++){
-    // *(m->values+ i)  = (float*)malloc(m->cols * sizeof(float));
-    m->values[i] = (float*)malloc(m->cols * sizeof(float));
-  }
-
-  if (!random_init){
-    return;
-  }
-
-  for (int i = 0; i < m->rows; i++){
-    for (int j = 0; j < m->cols; j++){
-        // *(*(m->values+ i) + j) = (float)rand()/RAND_MAX;
-        m->values[i][j] = (float)rand()/RAND_MAX;
-    }
-  }
-}
-void print_matrix(Matrix* m){
-  for (int i = 0; i < m->rows; i++){
-    for (int j = 0; j < m->cols; j++){
-      // printf("%f ",*(*(m->values+ i) + j));
-      printf("%f ",m->values[i][j]);
-    }
-    printf("\n");
-  }
-
-}
-void free_matrix(Matrix* m){
-
-  for (int i = 0; i < m->rows; i++){
-    // free(*(m->values+i));
-    free((m->values[i]));
-  }
-  free(m->values);
+void mse_forward(float* y, float* y_hat, float* loss, size_t B, size_t OC){
+	for (int b = 0; b < B; b++){
+		float* b_y = y + b*OC;
+		float* b_y_hat = y_hat + b*OC;
+		for (int oc = 0; oc < OC; oc++){
+			*loss += (b_y_hat[oc] - b_y[oc] ) * (b_y_hat[oc] - b_y[oc]) / B;
+		}
+	}
 }
 
-void or_test(Matrix* x, Matrix* y){
-  x->values[0][0] = ((float)rand()/RAND_MAX) > 0.5 ? 1.0 : 0.0;
-  x->values[0][1] = ((float)rand()/RAND_MAX) > 0.5 ? 1.0 : 0.0;
-  y->values[0][0] =  (x->values[0][0] > x->values[0][1]) ? x->values[0][0] : x->values[0][1];
+void mse_backward(float* y, float* y_hat, float* dy_hat, size_t B, size_t OC){
+	for (int b = 0; b < B; b++){
+		float* y_row = y + b*OC;
+		float* y_hat_row = y_hat + b*OC;
+		float* dy_hat_row = dy_hat + b*OC;
+		for (int oc = 0; oc < OC; oc++){
+			dy_hat_row[oc] += 2/B * (y_hat_row[oc] - y_row[oc]);
+		}
+	}
+}
+void generate_OR(float* inp, float* y, size_t B, size_t C, size_t OC){
+	printf("X:\n");
+	for (int b = 0; b < B; b++){
+		float* b_inp = inp + b*C;
+		float* b_y = y + b*OC;
+		for (int c = 0; c < C; c++){
+			b_inp[c] = (float)rand()/RAND_MAX;
+			printf("%f ",b_inp[c]);
+		}
+		printf("\n");
+		for (int oc = 0; oc < OC; oc++){
+			for (int c = 0; c < C; c++){
+				b_y[oc] += b_inp[c] ;
+			}
+			b_y[oc] = b_y[oc] > 1.0 ? 1.0 : b_y[oc];
+			b_y[oc] = b_y[oc] < 0.0 ? 0.0 : b_y[oc];
+		}
+	}
 }
 
-void train(Matrix* x, Matrix* y, Matrix* w, Matrix* o, Matrix* y_hat, int epochs){
-  float* loss;
-  loss = (float*)malloc(sizeof(float));
-  *loss = 0.0;
-  for (int i = 0; i < epochs; i++){
-    or_test(x,y);
-    matmul_forward(x,w,o);
-    sigmoid(o,y_hat);
-    *loss += abs(y_hat->values[0][0] + y->values[0][0]);
-    y_hat->values[0][0] = 0.0;
-  }
-  *loss /= epochs;
-  printf("Loss: %f\n",*loss);
-}
 
 int main() {
   srand(0);
-  Matrix x = {1,2};
-  Matrix y = {1,1};
 
-  Matrix w = {2, 1};
-  Matrix o = {1, 1};
-  Matrix y_hat = {1,1};
+  size_t C = 4;
+  size_t B = 2;
+  size_t OC = 1;
 
-  malloc_and_init_matrix(&x ,false);
-  malloc_and_init_matrix(&y ,false);
-  malloc_and_init_matrix(&w ,true);
-  malloc_and_init_matrix(&o ,false);
-  malloc_and_init_matrix(&y_hat ,false);
-  train(&x,&y,&w,&o,&y_hat,100);
+  float* inp = make_random_float(B*C,true);
+  float* weight = make_random_float(C*OC,true);
+  float* bias = make_random_float(OC,true);
+  float* out = make_random_float(B*OC,false);
+  float* y = make_random_float(B*OC,false);
+  float* loss= make_random_float(1,false);
+
+  float* dinp = make_random_float(B*C,false);
+  float* dweight = make_random_float(C*OC,false);
+  float* dbias = make_random_float(OC,false);
+  float* dy_hat= make_random_float(OC,false);
 
 
-  free_matrix(&x);
-  free_matrix(&y);
-  free_matrix(&w);
-  free_matrix(&o);
-  free_matrix(&y_hat);
+	generate_OR(inp,y,B,C,OC);
+
+	matmul_forward(inp,out,weight,bias,B,C,OC);
+	mse_forward(y,out,loss,B,OC);
+
+	mse_backward(y,out,dy_hat,B,OC);
+	matmul_backward(inp,dinp,dy_hat,weight,dweight,dbias,B,C,OC);
+
+
+  printf("\n");
+  printf("weight:\n");
+  for (int oc = 0; oc < OC; oc++){
+    for (int c = 0; c < C; c++){
+      printf("%f ",weight[oc*C + c]);
+    }
+    printf("B: %f",bias[oc]);
+    printf("\n");
+  }
+
+  printf("\n");
+  printf("dweight:\n");
+  for (int oc = 0; oc < OC; oc++){
+    for (int c = 0; c < C; c++){
+      printf("%f ",dweight[oc*C + c]);
+    }
+    printf("B: %f",dbias[oc]);
+    printf("\n");
+  }
+
+  printf("\n");
+	for (int x = 0; x < B*OC; x++){
+    printf("Y: %f  ",y[x]);
+    printf("Y_hat: %f  ",out[x]);
+    printf("dY_hat: %f",dy_hat[x]);
+		printf("\n");
+	}
+  printf("\n");
+  for (int b = 0; b < 1; b++){
+		printf("Loss: %f  ",loss[b]);
+    printf("\n");
+  }
+  printf("\n");
+
+  free(inp);
+  free(weight);
+  free(bias);
+  free(out);
+	free(y);
+	free(loss);
+
+  free(dinp);
+  free(dweight);
+  free(dbias);
+  free(dy_hat);
 
   return 0;
 }
