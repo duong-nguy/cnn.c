@@ -139,12 +139,13 @@ int main() {
 
 	generate_l_co_norm(inp,y,B,C,OC);
 
+  generate_OR(inp,y,B,C,OC);
 
-	matmul_forward(inp,out,weight,bias,B,C,OC);
-	mse_forward(y,out,loss,B,OC);
+  matmul_forward(inp,out,weight,bias,B,C,OC);
+  mse_forward(y,out,loss,B,OC);
 
-	mse_backward(y,out,dy_hat,B,OC);
-	matmul_backward(inp,dinp,dy_hat,weight,dweight,dbias,B,C,OC);
+  mse_backward(y,out,dy_hat,B,OC);
+  matmul_backward(inp,dinp,dy_hat,weight,dweight,dbias,B,C,OC);
 
 
   printf("\n");
