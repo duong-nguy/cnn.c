@@ -81,10 +81,10 @@ void matmul_backward(float* inp, float* dinp, float* dout, float* weight,
 
 void mse_forward(float* y, float* y_hat, float* loss, size_t B, size_t OC){
 	for (int b = 0; b < B; b++){
-		float* b_y = y + b*OC;
-		float* b_y_hat = y_hat + b*OC;
+		float* y_row = y + b*OC;
+		float* y_hat_row = y_hat + b*OC;
 		for (int oc = 0; oc < OC; oc++){
-			*loss += (b_y_hat[oc] - b_y[oc] ) * (b_y_hat[oc] - b_y[oc]) / B;
+			*loss += (y_hat_row[oc] - y_row[oc] ) * (y_hat_row[oc] - y_row[oc]) / B;
 		}
 	}
 }
@@ -95,26 +95,24 @@ void mse_backward(float* y, float* y_hat, float* dy_hat, size_t B, size_t OC){
 		float* y_hat_row = y_hat + b*OC;
 		float* dy_hat_row = dy_hat + b*OC;
 		for (int oc = 0; oc < OC; oc++){
-			dy_hat_row[oc] += 2/B * (y_hat_row[oc] - y_row[oc]);
+			dy_hat_row[oc] += 2.0/B * (y_hat_row[oc] - y_row[oc]);
 		}
 	}
 }
-void generate_OR(float* inp, float* y, size_t B, size_t C, size_t OC){
-	printf("X:\n");
+
+void generate_l_co_norm(float* inp, float* y, size_t B, size_t C, size_t OC){
 	for (int b = 0; b < B; b++){
-		float* b_inp = inp + b*C;
-		float* b_y = y + b*OC;
+		float* inp_row = inp + b*C;
+		float* y_row = y + b*OC;
 		for (int c = 0; c < C; c++){
-			b_inp[c] = (float)rand()/RAND_MAX;
-			printf("%f ",b_inp[c]);
+			inp_row[c] = (float)rand()/RAND_MAX;
 		}
-		printf("\n");
 		for (int oc = 0; oc < OC; oc++){
 			for (int c = 0; c < C; c++){
-				b_y[oc] += b_inp[c] ;
+				y_row[oc] += inp_row[c] ;
 			}
-			b_y[oc] = b_y[oc] > 1.0 ? 1.0 : b_y[oc];
-			b_y[oc] = b_y[oc] < 0.0 ? 0.0 : b_y[oc];
+			y_row[oc] = y_row[oc] > 1.0 ? 1.0 : y_row[oc];
+			// y_row[oc] = y_row[oc] < 0.0 ? 0.0 : y_row[oc];
 		}
 	}
 }
@@ -123,9 +121,9 @@ void generate_OR(float* inp, float* y, size_t B, size_t C, size_t OC){
 int main() {
   srand(0);
 
-  size_t C = 4;
-  size_t B = 2;
-  size_t OC = 1;
+  size_t C = 10;
+  size_t B = 10;
+  size_t OC = 10;
 
   float* inp = make_random_float(B*C,true);
   float* weight = make_random_float(C*OC,true);
@@ -137,10 +135,10 @@ int main() {
   float* dinp = make_random_float(B*C,false);
   float* dweight = make_random_float(C*OC,false);
   float* dbias = make_random_float(OC,false);
-  float* dy_hat= make_random_float(OC,false);
+  float* dy_hat= make_random_float(B*OC,false);
 
+	generate_l_co_norm(inp,y,B,C,OC);
 
-	generate_OR(inp,y,B,C,OC);
 
 	matmul_forward(inp,out,weight,bias,B,C,OC);
 	mse_forward(y,out,loss,B,OC);
@@ -170,11 +168,17 @@ int main() {
   }
 
   printf("\n");
-	for (int x = 0; x < B*OC; x++){
-    printf("Y: %f  ",y[x]);
-    printf("Y_hat: %f  ",out[x]);
-    printf("dY_hat: %f",dy_hat[x]);
-		printf("\n");
+  printf("dy_hat:\n");
+	for (int b = 0; b < B; b++){
+		float* dy_hat_row = dy_hat + b*OC;
+		float* y_row = y + b*OC;
+		float* out_row = out + b*OC;
+		for (int oc = 0; oc < OC; oc++){
+   		//printf("%f",y_row[oc]);
+    	//printf("--%f  ",out_row[oc]);
+		 	printf("%f ",dy_hat_row[oc]);
+		}
+			printf("\n");
 	}
   printf("\n");
   for (int b = 0; b < 1; b++){
