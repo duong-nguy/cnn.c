@@ -95,7 +95,7 @@ void mse_backward(float* y, float* y_hat, float* dy_hat, size_t B, size_t OC){
 		float* y_hat_row = y_hat + b*OC;
 		float* dy_hat_row = dy_hat + b*OC;
 		for (int oc = 0; oc < OC; oc++){
-			dy_hat_row[oc] += 2/B * (y_hat_row[oc] - y_row[oc]);
+			dy_hat_row[oc] += 2.0/B * (y_hat_row[oc] - y_row[oc]);
 		}
 	}
 }
